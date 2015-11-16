@@ -18,6 +18,8 @@ class TypeChecking
 
     @markersOfFile = new Map
 
+    @scalaNotes = []
+
     @disposables.add atom.workspace.observeTextEditors (editor) =>
       if isScalaSource(editor) # TODO: check that the source is also in an ensime-activated project.  ensime:start should log which directories are ensime-enabled
         @editors.set(editor.getPath(), editor)
@@ -32,20 +34,25 @@ class TypeChecking
     @notesByFile = _.groupBy(notes, (note) -> note.file)
 
     addNoteToMessageView = (note) =>
-      file = note.file
-      @messages.add new LineMessageView
-          file: file
-          line: note.line
-          character: note.col
-          message: note.msg
-          className: switch note.severity.typehint
-            when "NoteError" then "highlight-error"
-            when "NoteWarn" then "highlight-warning"
-            else ""
+      isSameAsNote = (n) -> note.line == n.line && note.col == n.col && note.file == n.file && note.msg == n.msg
+      alreadyShown = _.some(@scalaNotes, isSameAsNote)
+      if (not alreadyShown)
+        @scalaNotes.push note
+        file = note.file
+
+        @messages.add new LineMessageView
+            file: file
+            line: note.line
+            character: note.col
+            message: note.msg
+            className: switch note.severity.typehint
+              when "NoteError" then "highlight-error"
+              when "NoteWarn" then "highlight-warning"
+              else ""
 
     for file, notes of @notesByFile
       if(not file.includes('dep-src')) # TODO: put under flag
-        addNoteToMessageView note for note in notes
+          addNoteToMessageView note for note in notes
 
         # TODO: add markers if editor open
         if(@editors.has(file))
@@ -57,6 +64,7 @@ class TypeChecking
 
   clearScalaNotes: ->
     @messages.clear()
+    @scalaNotes = []
 
   # cleanup
   destroy: ->
