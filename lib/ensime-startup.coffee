@@ -11,6 +11,7 @@ remote = require 'remote'
 {parseDotEnsime} = require './ensime-client/dotensime-utils'
 Client = require './client'
 {updateEnsimeServer} = require './ensime-server-update'
+_ = require 'lodash'
 
 chokidar = require 'chokidar'
 
@@ -78,22 +79,22 @@ startClient = (parsedDotEnsime, generalHandler, callback) ->
   else
     serverPid = undefined
 
-    whenAllAdded = (files, f) ->
+    whenAllAdded = (dir, files, f) ->
       log('starting watching for: '+files)
-      file = files.pop() # NB: mutates files
-      watcher = chokidar.watch(file, {
+      seen = 0
+      watcher = chokidar.watch(dir, {
         persistent: true
       }).on('add', (path) ->
-        console.log 'Seen: ', path
-        watcher.close()
-        if 0 == files.length
+        if _.some(files, (f) -> f == path)
+          seen = seen + 1
+        console.log 'Seen: ', seen, ' file: ', path
+        if files.length == seen
+          watcher.close()
           console.log('All files seen. Starting client')
           f()
-        else
-          whenAllAdded(files, f)
       )
 
-    whenAllAdded([portFilePath, httpPortFilePath], () ->
+    whenAllAdded(parsedDotEnsime.cacheDir, [portFilePath, httpPortFilePath], () ->
       port = fs.readFileSync(portFilePath).toString()
       httpPort = removeTrainingNewline(fs.readFileSync(httpPortFilePath).toString())
       callback(new Client(port, httpPort, generalHandler, serverPid))
